@@ -50,13 +50,29 @@ fun GeminiScreen(
     // Restore saved API Key and Model on first launch
     LaunchedEffect(Unit) {
         val savedKey = prefs.getString("gemini_api_key", "") ?: ""
-        val savedModel = prefs.getString("gemini_model", "gemini-2.0-flash") ?: "gemini-2.0-flash"
+        val rawSavedModel = prefs.getString("gemini_model", "gemini-3.8-flash") ?: "gemini-3.8-flash"
+        val savedModel = if (GeminiDiagnostics.isDeprecatedOrRestricted(rawSavedModel)) {
+            "gemini-3.8-flash"
+        } else {
+            rawSavedModel
+        }
+        if (savedModel != rawSavedModel) {
+            prefs.edit().putString("gemini_model", savedModel).apply()
+        }
+
+        apiKeyInput = savedKey
+        GeminiDiagnostics.apiKey = savedKey
+        GeminiDiagnostics.selectedModel = savedModel
+        viewModel.selectAiModel(savedModel)
+
         if (savedKey.isNotBlank()) {
-            apiKeyInput = savedKey
-            GeminiDiagnostics.apiKey = savedKey
-            GeminiDiagnostics.selectedModel = savedModel
-            viewModel.selectAiModel(savedModel)
             viewModel.refreshAiModels(savedKey)
+        }
+    }
+
+    LaunchedEffect(activeModel) {
+        if (activeModel.isNotBlank() && !GeminiDiagnostics.isDeprecatedOrRestricted(activeModel)) {
+            prefs.edit().putString("gemini_model", activeModel).apply()
         }
     }
 
@@ -147,6 +163,9 @@ fun GeminiScreen(
                             apiKeyInput = it.trim()
                             GeminiDiagnostics.apiKey = apiKeyInput
                             prefs.edit().putString("gemini_api_key", apiKeyInput).apply()
+                            if (apiKeyInput.length > 25) {
+                                viewModel.refreshAiModels(apiKeyInput)
+                            }
                         },
                         modifier = Modifier.fillMaxWidth(),
                         colors = OutlinedTextFieldDefaults.colors(
@@ -192,11 +211,10 @@ fun GeminiScreen(
 
                     // Model Selection Chips
                     val defaultModelCandidates = listOf(
-                        "gemini-2.0-flash",
-                        "gemini-1.5-flash",
-                        "gemini-2.0-flash-lite",
                         "gemini-3.8-flash",
-                        "gemini-3.6-flash"
+                        "gemini-3.5-flash",
+                        "gemini-3.5-flash-lite",
+                        "gemini-3.1-flash-lite"
                     )
                     val displayModels = if (availableModels.isNotEmpty()) availableModels else defaultModelCandidates
 

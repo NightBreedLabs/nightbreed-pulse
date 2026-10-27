@@ -11,8 +11,14 @@ import java.net.URL
 object GeminiDiagnostics {
 
     var apiKey: String = ""
-    var selectedModel: String = "gemini-2.0-flash"
+    var selectedModel: String = "gemini-3.8-flash"
     var availableModels: List<String> = emptyList()
+    var lastError: String = ""
+
+    fun isDeprecatedOrRestricted(model: String): Boolean {
+        val lower = model.lowercase()
+        return lower.contains("1.5") || lower.contains("2.0") || lower.contains("2.5")
+    }
 
     /**
      * Queries Google AI Studio to retrieve the exact models supported by the provided API key.
@@ -27,7 +33,8 @@ object GeminiDiagnostics {
             conn.connectTimeout = 8000
             conn.readTimeout = 10000
 
-            if (conn.responseCode == 200) {
+            val code = conn.responseCode
+            if (code == 200) {
                 val responseText = conn.inputStream.bufferedReader().use { it.readText() }
                 conn.disconnect()
                 val json = JSONObject(responseText)
@@ -54,22 +61,28 @@ object GeminiDiagnostics {
                 }
                 availableModels = supported
 
-                // Automatically prioritize a fast, modern Flash model
-                val prioritized = supported.firstOrNull { it == "gemini-2.0-flash" }
-                    ?: supported.firstOrNull { it == "gemini-1.5-flash" }
-                    ?: supported.firstOrNull { it.contains("flash") && !it.contains("lite") && !it.contains("thinking") }
-                    ?: supported.firstOrNull { it.contains("flash") }
+                // Automatically prioritize modern, active Gemini 3 Flash models
+                val prioritized = supported.firstOrNull { it == "gemini-3.8-flash" }
+                    ?: supported.firstOrNull { it == "gemini-3.5-flash" }
+                    ?: supported.firstOrNull { it == "gemini-3.5-flash-lite" }
+                    ?: supported.firstOrNull { it == "gemini-3.1-flash-lite" }
+                    ?: supported.firstOrNull { it.startsWith("gemini-3") && it.contains("flash") }
+                    ?: supported.firstOrNull { it.contains("flash") && !isDeprecatedOrRestricted(it) }
+                    ?: supported.firstOrNull { !isDeprecatedOrRestricted(it) }
                     ?: supported.firstOrNull()
 
-                if (prioritized != null) {
+                if (prioritized != null && (isDeprecatedOrRestricted(selectedModel) || !supported.contains(selectedModel))) {
                     selectedModel = prioritized
                 }
                 supported
             } else {
+                val err = conn.errorStream?.bufferedReader()?.use { it.readText() } ?: "HTTP $code"
                 conn.disconnect()
+                lastError = "Model detection failed ($code): $err"
                 emptyList()
             }
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            lastError = "Model detection error: ${e.message}"
             emptyList()
         }
     }
@@ -82,20 +95,37 @@ object GeminiDiagnostics {
             return@withContext "Gemini API key is not configured. Please tap the key icon above to set your API key."
         }
 
+        // Dynamically fetch available models if not already discovered
+        if (availableModels.isEmpty()) {
+            fetchAvailableModels(apiKey)
+        }
+
         // Candidate fallback priority list
         val candidates = mutableListOf<String>()
-        if (selectedModel.isNotBlank()) candidates.add(selectedModel)
+
+        // 1. If currently selected model is valid and not deprecated, prioritize it
+        if (selectedModel.isNotBlank() && !isDeprecatedOrRestricted(selectedModel)) {
+            candidates.add(selectedModel)
+        }
+
+        // 2. Add detected available models that support generateContent
+        if (availableModels.isNotEmpty()) {
+            candidates.addAll(availableModels.filter { it.contains("flash") && !isDeprecatedOrRestricted(it) })
+            candidates.addAll(availableModels.filter { !isDeprecatedOrRestricted(it) })
+            candidates.addAll(availableModels)
+        }
+
+        // 3. Fallback to Gemini 3 series standards
         candidates.addAll(listOf(
-            "gemini-2.0-flash",
-            "gemini-1.5-flash",
-            "gemini-2.0-flash-lite",
             "gemini-3.8-flash",
-            "gemini-3.6-flash",
-            "gemini-1.5-pro"
+            "gemini-3.5-flash",
+            "gemini-3.5-flash-lite",
+            "gemini-3.1-flash-lite"
         ))
+
         val candidateModels = candidates.distinct()
 
-        var lastError = "No response"
+        var lastFailureDetail = if (lastError.isNotBlank()) lastError else "No response"
 
         for (model in candidateModels) {
             try {
@@ -138,19 +168,19 @@ object GeminiDiagnostics {
                 } else {
                     val error = conn.errorStream?.bufferedReader()?.use { it.readText() } ?: "HTTP $code"
                     conn.disconnect()
-                    lastError = "Model $model failed ($code): $error"
+                    lastFailureDetail = "Model $model failed ($code): $error"
 
-                    // If authentication or permission failed, stop trying further models
+                    // If authentication or permission failed, stop trying further models immediately
                     if (code == 403 || code == 401) {
-                        return@withContext "Gemini API Authentication Error ($code): Please check your API key."
+                        return@withContext "Gemini API Authentication Error ($code): Please verify your API key.\n\nDetails: $error"
                     }
-                    // For 404 (model not found / deprecated) or 400 (unsupported), loop to next model
+                    // For 404 (model deprecated / not found) or 400 (unsupported), loop to next candidate
                 }
             } catch (e: Exception) {
-                lastError = "Connection error with $model: ${e.message}"
+                lastFailureDetail = "Connection error with $model: ${e.message}"
             }
         }
 
-        "All Gemini model candidates failed. Last error: $lastError"
+        "All Gemini model candidates failed.\n\nDiagnostic details:\n$lastFailureDetail"
     }
 }
