@@ -1,7 +1,9 @@
 package com.nightbreedlabs.pulse.ui.screens
 
+import android.content.Context
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -11,12 +13,15 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Key
 import androidx.compose.material.icons.rounded.Psychology
+import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Send
+import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -29,12 +34,31 @@ fun GeminiScreen(
     viewModel: PulseViewModel,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
+    val prefs = remember { context.getSharedPreferences("pulse_prefs", Context.MODE_PRIVATE) }
+
     val messages by viewModel.chatMessages.collectAsState()
     val isThinking by viewModel.isAiThinking.collectAsState()
+    val activeModel by viewModel.currentAiModel.collectAsState()
+    val availableModels by viewModel.availableAiModels.collectAsState()
+
     var inputQuery by remember { mutableStateOf("") }
     var apiKeyInput by remember { mutableStateOf(GeminiDiagnostics.apiKey) }
     var showApiKeyDialog by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
+
+    // Restore saved API Key and Model on first launch
+    LaunchedEffect(Unit) {
+        val savedKey = prefs.getString("gemini_api_key", "") ?: ""
+        val savedModel = prefs.getString("gemini_model", "gemini-2.0-flash") ?: "gemini-2.0-flash"
+        if (savedKey.isNotBlank()) {
+            apiKeyInput = savedKey
+            GeminiDiagnostics.apiKey = savedKey
+            GeminiDiagnostics.selectedModel = savedModel
+            viewModel.selectAiModel(savedModel)
+            viewModel.refreshAiModels(savedKey)
+        }
+    }
 
     LaunchedEffect(messages.size) {
         if (messages.isNotEmpty()) {
@@ -70,28 +94,38 @@ fun GeminiScreen(
                         modifier = Modifier.size(22.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "Gemini Diagnostics AI",
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = TokyoTextPrimary
-                    )
+                    Column {
+                        Text(
+                            text = "Gemini Diagnostics AI",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = TokyoTextPrimary
+                        )
+                        Text(
+                            text = activeModel,
+                            fontSize = 10.sp,
+                            color = TokyoSecondary
+                        )
+                    }
                 }
 
-                IconButton(
-                    onClick = { showApiKeyDialog = !showApiKeyDialog },
-                    modifier = Modifier.size(32.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.Key,
-                        contentDescription = "API Key",
-                        tint = if (apiKeyInput.isNotBlank()) TokyoSuccess else TokyoWarning,
-                        modifier = Modifier.size(18.dp)
-                    )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(
+                        onClick = { showApiKeyDialog = !showApiKeyDialog },
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Key,
+                            contentDescription = "API Key & Model",
+                            tint = if (apiKeyInput.isNotBlank()) TokyoSuccess else TokyoWarning,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
                 }
             }
         }
 
+        // Expanded Configuration Panel
         if (showApiKeyDialog) {
             Spacer(modifier = Modifier.height(8.dp))
             Surface(
@@ -99,18 +133,20 @@ fun GeminiScreen(
                 color = TokyoSurfaceVariant,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Column(modifier = Modifier.padding(12.dp)) {
+                Column(modifier = Modifier.padding(14.dp)) {
                     Text(
-                        text = "Enter Google Gemini API Key:",
+                        text = "Google Gemini API Key:",
                         fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
                         color = TokyoTextSecondary
                     )
                     Spacer(modifier = Modifier.height(6.dp))
                     OutlinedTextField(
                         value = apiKeyInput,
                         onValueChange = {
-                            apiKeyInput = it
-                            GeminiDiagnostics.apiKey = it
+                            apiKeyInput = it.trim()
+                            GeminiDiagnostics.apiKey = apiKeyInput
+                            prefs.edit().putString("gemini_api_key", apiKeyInput).apply()
                         },
                         modifier = Modifier.fillMaxWidth(),
                         colors = OutlinedTextFieldDefaults.colors(
@@ -120,8 +156,75 @@ fun GeminiScreen(
                             unfocusedTextColor = TokyoTextPrimary
                         ),
                         shape = RoundedCornerShape(10.dp),
-                        singleLine = true
+                        singleLine = true,
+                        placeholder = { Text("Paste AIzaSy... key", fontSize = 11.sp) }
                     )
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Select Model:",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = TokyoTextSecondary
+                        )
+                        TextButton(
+                            onClick = { viewModel.refreshAiModels(apiKeyInput) },
+                            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Refresh,
+                                contentDescription = "Refresh",
+                                tint = TokyoPrimary,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Detect Models", fontSize = 10.sp, color = TokyoPrimary)
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    // Model Selection Chips
+                    val defaultModelCandidates = listOf(
+                        "gemini-2.0-flash",
+                        "gemini-1.5-flash",
+                        "gemini-2.0-flash-lite",
+                        "gemini-3.8-flash",
+                        "gemini-3.6-flash"
+                    )
+                    val displayModels = if (availableModels.isNotEmpty()) availableModels else defaultModelCandidates
+
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        items(displayModels) { model ->
+                            val isSelected = (model == activeModel)
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = if (isSelected) TokyoPrimary else TokyoSurface,
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .clickable {
+                                        viewModel.selectAiModel(model)
+                                        prefs.edit().putString("gemini_model", model).apply()
+                                    }
+                            ) {
+                                Text(
+                                    text = model,
+                                    fontSize = 10.sp,
+                                    color = if (isSelected) TokyoOnPrimary else TokyoTextPrimary,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -217,7 +320,7 @@ fun GeminiScreen(
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
-                                    text = "Gemini is analyzing...",
+                                    text = "Gemini ($activeModel) is analyzing...",
                                     fontSize = 12.sp,
                                     color = TokyoTextSecondary
                                 )

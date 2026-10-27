@@ -43,6 +43,12 @@ class PulseViewModel : ViewModel() {
     private val _isAiThinking = MutableStateFlow(false)
     val isAiThinking: StateFlow<Boolean> = _isAiThinking.asStateFlow()
 
+    private val _currentAiModel = MutableStateFlow(GeminiDiagnostics.selectedModel)
+    val currentAiModel: StateFlow<String> = _currentAiModel.asStateFlow()
+
+    private val _availableAiModels = MutableStateFlow<List<String>>(emptyList())
+    val availableAiModels: StateFlow<List<String>> = _availableAiModels.asStateFlow()
+
     private val _selectedTab = MutableStateFlow(0)
     val selectedTab: StateFlow<Int> = _selectedTab.asStateFlow()
 
@@ -277,6 +283,7 @@ class PulseViewModel : ViewModel() {
                 """.trimIndent()
 
                 val response = GeminiDiagnostics.askGemini(fullPrompt)
+                _currentAiModel.value = GeminiDiagnostics.selectedModel
                 val aiMsg = ChatMessage(id = (System.currentTimeMillis() + 1).toString(), isUser = false, text = response)
                 _chatMessages.value = _chatMessages.value + aiMsg
             } catch (e: Exception) {
@@ -286,5 +293,18 @@ class PulseViewModel : ViewModel() {
                 _isAiThinking.value = false
             }
         }
+    }
+
+    fun refreshAiModels(apiKey: String = GeminiDiagnostics.apiKey) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val list = GeminiDiagnostics.fetchAvailableModels(apiKey)
+            _availableAiModels.value = list
+            _currentAiModel.value = GeminiDiagnostics.selectedModel
+        }
+    }
+
+    fun selectAiModel(model: String) {
+        GeminiDiagnostics.selectedModel = model
+        _currentAiModel.value = model
     }
 }
