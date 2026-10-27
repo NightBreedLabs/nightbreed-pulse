@@ -7,6 +7,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.VpnKey
 import androidx.compose.material.icons.rounded.Wifi
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -62,7 +63,8 @@ fun HeaderBar(
                     )
                 }
 
-                // Wi-Fi Status Pill
+                // Connection Status Pill
+                val isTailscale = wifiInfo.connectionType.contains("Tailscale")
                 Surface(
                     shape = RoundedCornerShape(20.dp),
                     color = TokyoSurfaceVariant,
@@ -73,14 +75,14 @@ fun HeaderBar(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
-                            imageVector = Icons.Rounded.Wifi,
-                            contentDescription = "Wi-Fi",
-                            tint = TokyoCyan,
+                            imageVector = if (isTailscale) Icons.Rounded.VpnKey else Icons.Rounded.Wifi,
+                            contentDescription = if (isTailscale) "Tailscale" else "Wi-Fi",
+                            tint = if (isTailscale) TokyoCyan else TokyoPrimary,
                             modifier = Modifier.size(14.dp)
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = wifiInfo.ip,
+                            text = if (isTailscale) (wifiInfo.tailscaleIp ?: wifiInfo.ip) else wifiInfo.ip,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Medium,
                             color = TokyoTextPrimary
@@ -105,7 +107,7 @@ fun HeaderBar(
                         color = TokyoTextPrimary
                     )
                     Text(
-                        text = "Pixel 11 Pro Diagnostics • ${wifiInfo.subnet}",
+                        text = "${wifiInfo.connectionType} • Subnet: ${wifiInfo.subnet}",
                         fontSize = 12.sp,
                         color = TokyoTextMuted
                     )

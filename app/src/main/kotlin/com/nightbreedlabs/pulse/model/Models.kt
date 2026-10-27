@@ -6,6 +6,7 @@ enum class DeviceType(val label: String) {
     ROKU_TV("Roku TV / Streamer"),
     ANDROID_TV("Android TV / ADB"),
     WINDOWS_PC("Windows PC"),
+    LINUX_SERVER("Linux Server / Service"),
     GOOGLE_CAST("Google Cast"),
     GENERIC("Network Device")
 }
@@ -34,10 +35,12 @@ data class DiagnosticTask(
 )
 
 data class WifiNetworkInfo(
-    val ip: String = "192.168.1.100",
-    val subnet: String = "192.168.1.0/24",
-    val gateway: String = "192.168.1.1",
-    val isConnected: Boolean = true
+    val ip: String = "192.168.8.189",
+    val subnet: String = "192.168.8.0/24",
+    val gateway: String = "192.168.8.1",
+    val isConnected: Boolean = true,
+    val connectionType: String = "Wi-Fi",
+    val tailscaleIp: String? = null
 )
 
 data class VizioInfo(

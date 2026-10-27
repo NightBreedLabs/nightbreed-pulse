@@ -2,17 +2,24 @@ package com.nightbreedlabs.pulse.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Stop
+import androidx.compose.material.icons.rounded.VpnKey
+import androidx.compose.material.icons.rounded.Wifi
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -32,7 +39,10 @@ fun ScannerScreen(
     val scanProgress by viewModel.scanProgress.collectAsState()
     val scanStatusText by viewModel.scanStatusText.collectAsState()
     val devices by viewModel.discoveredDevices.collectAsState()
+    val targetSubnetPrefix by viewModel.targetSubnetPrefix.collectAsState()
 
+    var showCustomInput by remember { mutableStateOf(false) }
+    var customInputText by remember { mutableStateOf(targetSubnetPrefix) }
     var selectedFilter by remember { mutableStateOf<DeviceType?>(null) }
 
     val filteredDevices = remember(devices, selectedFilter) {
@@ -73,7 +83,7 @@ fun ScannerScreen(
                                 color = TokyoTextPrimary
                             )
                             Text(
-                                text = "${wifiInfo.subnet} • ${devices.size} Discovered",
+                                text = "Target: $targetSubnetPrefix.0/24 • ${devices.size} Discovered",
                                 fontSize = 13.sp,
                                 color = TokyoTextSecondary
                             )
@@ -102,6 +112,184 @@ fun ScannerScreen(
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 13.sp
                             )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    // Target Subnet Presets
+                    Text(
+                        text = "Target Subnet Presets:",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = TokyoTextMuted
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        // Home LAN via Tailscale
+                        item {
+                            val isSelected = targetSubnetPrefix == "192.168.8"
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = if (isSelected) TokyoPrimaryContainer else TokyoSurfaceVariant,
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .clickable {
+                                        viewModel.setTargetSubnetPrefix("192.168.8")
+                                        customInputText = "192.168.8"
+                                    }
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Home,
+                                        contentDescription = null,
+                                        tint = if (isSelected) TokyoPrimary else TokyoTextSecondary,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = "Home (192.168.8)",
+                                        fontSize = 11.sp,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                        color = if (isSelected) TokyoPrimary else TokyoTextPrimary
+                                    )
+                                }
+                            }
+                        }
+
+                        // Tailnet Nodes Scan
+                        item {
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = TokyoSurfaceVariant,
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .clickable {
+                                        viewModel.startTailnetScan()
+                                    }
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.VpnKey,
+                                        contentDescription = null,
+                                        tint = TokyoCyan,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = "Tailnet Mesh",
+                                        fontSize = 11.sp,
+                                        color = TokyoCyan
+                                    )
+                                }
+                            }
+                        }
+
+                        // Local / Cousin's LAN (192.168.1)
+                        item {
+                            val isSelected = targetSubnetPrefix == "192.168.1"
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = if (isSelected) TokyoPrimaryContainer else TokyoSurfaceVariant,
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .clickable {
+                                        viewModel.setTargetSubnetPrefix("192.168.1")
+                                        customInputText = "192.168.1"
+                                    }
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Wifi,
+                                        contentDescription = null,
+                                        tint = if (isSelected) TokyoPrimary else TokyoTextSecondary,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = "LAN (192.168.1)",
+                                        fontSize = 11.sp,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                        color = if (isSelected) TokyoPrimary else TokyoTextPrimary
+                                    )
+                                }
+                            }
+                        }
+
+                        // Custom Subnet Toggle
+                        item {
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = TokyoSurfaceVariant,
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .clickable { showCustomInput = !showCustomInput }
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Edit,
+                                        contentDescription = null,
+                                        tint = TokyoSecondary,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = "Custom",
+                                        fontSize = 11.sp,
+                                        color = TokyoSecondary
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    if (showCustomInput) {
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            OutlinedTextField(
+                                value = customInputText,
+                                onValueChange = {
+                                    customInputText = it
+                                    viewModel.setTargetSubnetPrefix(it)
+                                },
+                                placeholder = { Text("e.g. 192.168.8", fontSize = 11.sp) },
+                                modifier = Modifier.weight(1f),
+                                singleLine = true,
+                                shape = RoundedCornerShape(10.dp),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = TokyoPrimary,
+                                    unfocusedBorderColor = TokyoOutline,
+                                    focusedTextColor = TokyoTextPrimary,
+                                    unfocusedTextColor = TokyoTextPrimary
+                                )
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            TextButton(
+                                onClick = {
+                                    viewModel.setTargetSubnetPrefix(customInputText)
+                                    showCustomInput = false
+                                }
+                            ) {
+                                Text("Set", color = TokyoPrimary, fontWeight = FontWeight.Bold)
+                            }
                         }
                     }
 
@@ -147,7 +335,23 @@ fun ScannerScreen(
                 )
 
                 FilterChip(
-                    selected = selectedFilter == DeviceType.VIZIO_TV || selectedFilter == DeviceType.ROKU_TV,
+                    selected = selectedFilter == DeviceType.LINUX_SERVER || selectedFilter == DeviceType.GATEWAY,
+                    onClick = {
+                        selectedFilter = if (selectedFilter == DeviceType.LINUX_SERVER) null else DeviceType.LINUX_SERVER
+                    },
+                    label = { Text("Servers") },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = TokyoPrimaryContainer,
+                        selectedLabelColor = TokyoPrimary,
+                        containerColor = TokyoSurfaceVariant,
+                        labelColor = TokyoTextSecondary
+                    ),
+                    border = null,
+                    shape = RoundedCornerShape(14.dp)
+                )
+
+                FilterChip(
+                    selected = selectedFilter == DeviceType.VIZIO_TV || selectedFilter == DeviceType.ROKU_TV || selectedFilter == DeviceType.ANDROID_TV,
                     onClick = {
                         selectedFilter = if (selectedFilter == DeviceType.VIZIO_TV) null else DeviceType.VIZIO_TV
                     },
@@ -197,7 +401,7 @@ fun ScannerScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "Tap 'Scan' to discover all active devices on ${wifiInfo.subnet}",
+                        text = "Targeting $targetSubnetPrefix.0/24 • Tap 'Scan' to discover devices",
                         color = TokyoTextMuted,
                         fontSize = 13.sp
                     )

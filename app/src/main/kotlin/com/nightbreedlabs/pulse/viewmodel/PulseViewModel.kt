@@ -19,6 +19,9 @@ class PulseViewModel : ViewModel() {
     private val _discoveredDevices = MutableStateFlow<List<NetworkDevice>>(emptyList())
     val discoveredDevices: StateFlow<List<NetworkDevice>> = _discoveredDevices.asStateFlow()
 
+    private val _targetSubnetPrefix = MutableStateFlow("192.168.8")
+    val targetSubnetPrefix: StateFlow<String> = _targetSubnetPrefix.asStateFlow()
+
     private val _isScanning = MutableStateFlow(false)
     val isScanning: StateFlow<Boolean> = _isScanning.asStateFlow()
 
@@ -70,41 +73,77 @@ class PulseViewModel : ViewModel() {
         _selectedTab.value = index
     }
 
+    fun setTargetSubnetPrefix(prefix: String) {
+        val clean = prefix.trim().removeSuffix(".")
+        _targetSubnetPrefix.value = clean
+    }
+
     fun refreshNetworkInfo() {
         viewModelScope.launch(Dispatchers.IO) {
             val info = NetworkScanner.getLocalWifiInfo()
             _wifiInfo.value = info
+            if (info.connectionType.contains("Wi-Fi")) {
+                val parts = info.ip.split(".")
+                if (parts.size >= 3) {
+                    _targetSubnetPrefix.value = "${parts[0]}.${parts[1]}.${parts[2]}"
+                }
+            } else {
+                _targetSubnetPrefix.value = "192.168.8"
+            }
         }
     }
 
-    fun startSubnetScan() {
+    fun startSubnetScan(customPrefix: String? = null) {
         if (_isScanning.value) return
         _isScanning.value = true
         _scanProgress.value = 0f
-        _scanStatusText.value = "Starting network discovery..."
+
+        val prefixToScan = (customPrefix ?: _targetSubnetPrefix.value).trim().removeSuffix(".")
+        _scanStatusText.value = "Starting discovery on $prefixToScan.0/24..."
 
         scanJob = viewModelScope.launch(Dispatchers.IO) {
             try {
-                val currentInfo = _wifiInfo.value
-                val parts = currentInfo.ip.split(".")
-                val prefix = if (parts.size >= 3) "${parts[0]}.${parts[1]}.${parts[2]}" else "192.168.1"
+                val gateway = if (prefixToScan == "192.168.8") "192.168.8.1" else "$prefixToScan.1"
 
                 val results = NetworkScanner.scanSubnet(
-                    subnetPrefix = prefix,
-                    gatewayIp = currentInfo.gateway,
+                    subnetPrefix = prefixToScan,
+                    gatewayIp = gateway,
                     onProgress = { progress, status ->
                         _scanProgress.value = progress
                         _scanStatusText.value = status
                     }
                 )
                 _discoveredDevices.value = results
-                _scanStatusText.value = "Scan complete: Found ${results.size} devices"
+                _scanStatusText.value = "Scan complete: Found ${results.size} devices on $prefixToScan.0/24"
             } catch (e: Exception) {
                 _scanStatusText.value = "Scan interrupted: ${e.message}"
             } finally {
                 _isScanning.value = false
                 _scanProgress.value = 1f
-                // Proactively release memory
+                System.gc()
+            }
+        }
+    }
+
+    fun startTailnetScan() {
+        if (_isScanning.value) return
+        _isScanning.value = true
+        _scanProgress.value = 0f
+        _scanStatusText.value = "Scanning Tailscale mesh nodes..."
+
+        scanJob = viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val results = NetworkScanner.scanTailnetPeers { progress, status ->
+                    _scanProgress.value = progress
+                    _scanStatusText.value = status
+                }
+                _discoveredDevices.value = results
+                _scanStatusText.value = "Tailnet scan complete: Found ${results.size} active nodes"
+            } catch (e: Exception) {
+                _scanStatusText.value = "Tailnet scan interrupted: ${e.message}"
+            } finally {
+                _isScanning.value = false
+                _scanProgress.value = 1f
                 System.gc()
             }
         }

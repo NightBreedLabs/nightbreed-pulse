@@ -30,6 +30,7 @@ fun DeviceCard(
         DeviceType.ROKU_TV -> Pair(TokyoSecondary, Icons.Rounded.Tv)
         DeviceType.ANDROID_TV -> Pair(TokyoCyan, Icons.Rounded.SmartDisplay)
         DeviceType.WINDOWS_PC -> Pair(TokyoPrimary, Icons.Rounded.Computer)
+        DeviceType.LINUX_SERVER -> Pair(TokyoCyan, Icons.Rounded.Dns)
         DeviceType.GOOGLE_CAST -> Pair(TokyoTertiary, Icons.Rounded.Cast)
         DeviceType.GENERIC -> Pair(TokyoTextSecondary, Icons.Rounded.Lan)
     }
