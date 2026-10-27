@@ -12,6 +12,7 @@ object GeminiDiagnostics {
 
     var apiKey: String = ""
     var selectedModel: String = "gemini-3.8-flash"
+    var thinkingLevel: String = "medium"
     var availableModels: List<String> = emptyList()
     var lastError: String = ""
 
@@ -142,6 +143,13 @@ object GeminiDiagnostics {
                 val contentsArray = JSONArray().put(JSONObject().put("parts", partsArray))
                 val requestBody = JSONObject().put("contents", contentsArray)
 
+                // Inject thinkingLevel configuration for Gemini 3 models (e.g. medium reasoning)
+                if (thinkingLevel.isNotBlank()) {
+                    val thinkingConfig = JSONObject().put("thinkingLevel", thinkingLevel.lowercase())
+                    val generationConfig = JSONObject().put("thinkingConfig", thinkingConfig)
+                    requestBody.put("generationConfig", generationConfig)
+                }
+
                 OutputStreamWriter(conn.outputStream).use { writer ->
                     writer.write(requestBody.toString())
                     writer.flush()
@@ -161,7 +169,24 @@ object GeminiDiagnostics {
                         val content = candidatesArr.getJSONObject(0).optJSONObject("content")
                         val parts = content?.optJSONArray("parts")
                         if (parts != null && parts.length() > 0) {
-                            return@withContext parts.getJSONObject(0).optString("text", "No response content.")
+                            val textParts = mutableListOf<String>()
+                            var fallbackThought = ""
+                            for (p in 0 until parts.length()) {
+                                val partObj = parts.getJSONObject(p)
+                                val text = partObj.optString("text", "")
+                                val isThought = partObj.optBoolean("thought", false)
+                                if (text.isNotBlank()) {
+                                    if (!isThought) {
+                                        textParts.add(text)
+                                    } else {
+                                        fallbackThought = text
+                                    }
+                                }
+                            }
+                            val finalAnswer = if (textParts.isNotEmpty()) textParts.joinToString("\n\n") else fallbackThought
+                            if (finalAnswer.isNotBlank()) {
+                                return@withContext finalAnswer
+                            }
                         }
                     }
                     return@withContext "Empty response from Gemini ($model)."
@@ -169,6 +194,35 @@ object GeminiDiagnostics {
                     val error = conn.errorStream?.bufferedReader()?.use { it.readText() } ?: "HTTP $code"
                     conn.disconnect()
                     lastFailureDetail = "Model $model failed ($code): $error"
+
+                    // If request failed specifically due to thinkingConfig, retry immediately without generationConfig
+                    if (code == 400 && (error.contains("thinking") || error.contains("generationConfig"))) {
+                        try {
+                            val retryConn = url.openConnection() as HttpURLConnection
+                            retryConn.requestMethod = "POST"
+                            retryConn.setRequestProperty("Content-Type", "application/json")
+                            retryConn.connectTimeout = 8000
+                            retryConn.readTimeout = 15000
+                            retryConn.doOutput = true
+
+                            val simpleBody = JSONObject().put("contents", contentsArray)
+                            OutputStreamWriter(retryConn.outputStream).use { writer ->
+                                writer.write(simpleBody.toString())
+                                writer.flush()
+                            }
+                            if (retryConn.responseCode == 200) {
+                                val retryText = retryConn.inputStream.bufferedReader().use { it.readText() }
+                                retryConn.disconnect()
+                                selectedModel = model
+                                val retryJson = JSONObject(retryText)
+                                val cArr = retryJson.optJSONArray("candidates")
+                                val text = cArr?.getJSONObject(0)?.optJSONObject("content")?.optJSONArray("parts")?.getJSONObject(0)?.optString("text", "")
+                                if (!text.isNullOrBlank()) return@withContext text
+                            } else {
+                                retryConn.disconnect()
+                            }
+                        } catch (_: Exception) {}
+                    }
 
                     // If authentication or permission failed, stop trying further models immediately
                     if (code == 403 || code == 401) {

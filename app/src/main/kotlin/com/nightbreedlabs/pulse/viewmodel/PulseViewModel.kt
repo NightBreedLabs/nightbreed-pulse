@@ -49,6 +49,9 @@ class PulseViewModel : ViewModel() {
     private val _currentAiModel = MutableStateFlow(GeminiDiagnostics.selectedModel)
     val currentAiModel: StateFlow<String> = _currentAiModel.asStateFlow()
 
+    private val _currentThinkingLevel = MutableStateFlow(GeminiDiagnostics.thinkingLevel)
+    val currentThinkingLevel: StateFlow<String> = _currentThinkingLevel.asStateFlow()
+
     private val _availableAiModels = MutableStateFlow<List<String>>(emptyList())
     val availableAiModels: StateFlow<List<String>> = _availableAiModels.asStateFlow()
 
@@ -345,5 +348,10 @@ class PulseViewModel : ViewModel() {
     fun selectAiModel(model: String) {
         GeminiDiagnostics.selectedModel = model
         _currentAiModel.value = model
+    }
+
+    fun selectThinkingLevel(level: String) {
+        GeminiDiagnostics.thinkingLevel = level
+        _currentThinkingLevel.value = level
     }
 }

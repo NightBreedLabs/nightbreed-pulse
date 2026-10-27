@@ -40,6 +40,7 @@ fun GeminiScreen(
     val messages by viewModel.chatMessages.collectAsState()
     val isThinking by viewModel.isAiThinking.collectAsState()
     val activeModel by viewModel.currentAiModel.collectAsState()
+    val activeThinkingLevel by viewModel.currentThinkingLevel.collectAsState()
     val availableModels by viewModel.availableAiModels.collectAsState()
 
     var inputQuery by remember { mutableStateOf("") }
@@ -59,6 +60,10 @@ fun GeminiScreen(
         if (savedModel != rawSavedModel) {
             prefs.edit().putString("gemini_model", savedModel).apply()
         }
+
+        val savedThinking = prefs.getString("gemini_thinking_level", "medium") ?: "medium"
+        GeminiDiagnostics.thinkingLevel = savedThinking
+        viewModel.selectThinkingLevel(savedThinking)
 
         apiKeyInput = savedKey
         GeminiDiagnostics.apiKey = savedKey
@@ -118,7 +123,7 @@ fun GeminiScreen(
                             color = TokyoTextPrimary
                         )
                         Text(
-                            text = activeModel,
+                            text = "$activeModel • ${activeThinkingLevel.replaceFirstChar { it.uppercase() }} Thinking",
                             fontSize = 10.sp,
                             color = TokyoSecondary
                         )
@@ -243,6 +248,45 @@ fun GeminiScreen(
                             }
                         }
                     }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Text(
+                        text = "Thinking Level (Reasoning Depth):",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = TokyoTextSecondary
+                    )
+
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    val thinkingLevels = listOf("low", "medium", "high")
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        thinkingLevels.forEach { level ->
+                            val isSelected = (level.lowercase() == activeThinkingLevel.lowercase())
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = if (isSelected) TokyoSecondary else TokyoSurface,
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .clickable {
+                                        viewModel.selectThinkingLevel(level)
+                                        prefs.edit().putString("gemini_thinking_level", level).apply()
+                                    }
+                            ) {
+                                Text(
+                                    text = "${level.replaceFirstChar { it.uppercase() }} Reasoning",
+                                    fontSize = 10.sp,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                    color = if (isSelected) TokyoBackground else TokyoTextPrimary,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -338,7 +382,7 @@ fun GeminiScreen(
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
-                                    text = "Gemini ($activeModel) is analyzing...",
+                                    text = "Gemini ($activeModel • ${activeThinkingLevel.replaceFirstChar { it.uppercase() }}) is reasoning...",
                                     fontSize = 12.sp,
                                     color = TokyoTextSecondary
                                 )
