@@ -21,6 +21,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.nightbreedlabs.pulse.model.DeviceType
@@ -75,17 +76,24 @@ fun ScannerScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Column {
+                        Column(
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(end = 12.dp)
+                        ) {
                             Text(
                                 text = "Subnet Discovery",
                                 fontSize = 18.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = TokyoTextPrimary
                             )
+                            Spacer(modifier = Modifier.height(2.dp))
                             Text(
                                 text = "Target: $targetSubnetPrefix.0/24 • ${devices.size} Discovered",
-                                fontSize = 13.sp,
-                                color = TokyoTextSecondary
+                                fontSize = 12.sp,
+                                color = TokyoTextSecondary,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
 
@@ -94,12 +102,15 @@ fun ScannerScreen(
                                 if (isScanning) viewModel.cancelScan()
                                 else viewModel.startSubnetScan()
                             },
+                            modifier = Modifier
+                                .defaultMinSize(minWidth = 92.dp)
+                                .height(42.dp),
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = if (isScanning) TokyoError else TokyoPrimary,
                                 contentColor = TokyoOnPrimary
                             ),
-                            shape = RoundedCornerShape(16.dp),
-                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
+                            shape = RoundedCornerShape(14.dp),
+                            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
                         ) {
                             Icon(
                                 imageVector = if (isScanning) Icons.Rounded.Stop else Icons.Rounded.PlayArrow,
